@@ -236,7 +236,10 @@ const AdminDashboard = ({ userEmail, onLogout }) => {
   }
 
   const totalPatients = getTotalPatients();
-  const totalDoctors = getAllDoctors().length;
+  
+  // --- UPDATED: Use totalDoctors from API response ---
+  const totalDoctors = adminData?.totalDoctors || 0; 
+  
   const activeDoctorsToday = getActiveDoctorsToday().length;
   const totalDepartments = adminData?.departments?.length || 0;
 
@@ -328,6 +331,7 @@ const AdminDashboard = ({ userEmail, onLogout }) => {
           <div>
             <div className="grid md:grid-cols-4 gap-6 mb-8">
               <StatCard label="Total Patients" value={totalPatients} icon={Users} color="#00A8E8" />
+              {/* UPDATED: Display totalDoctors from API */}
               <StatCard label="Total Doctors" value={totalDoctors} icon={UserPlus} color="#40C9FF" />
               <StatCard label="Active Doctors Today" value={activeDoctorsToday} icon={Activity} color="#0066B2" />
               <StatCard label="Departments" value={totalDepartments} icon={Building2} color="#00A8E8" />

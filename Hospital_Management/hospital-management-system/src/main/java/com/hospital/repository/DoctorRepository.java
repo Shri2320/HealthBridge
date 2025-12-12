@@ -12,6 +12,10 @@ import java.util.Optional;
 public interface DoctorRepository extends JpaRepository<Doctor, Long> {
     Optional<Doctor> findByEmail(String email);
     boolean existsByEmail(String email);
+
+    // --- NEW METHOD FOR TOTAL COUNT ---
+    long countByHospital(Hospital hospital);
+
     List<Doctor> findByHospital(Hospital hospital);
     List<Doctor> findByDepartment(Department department);
     List<Doctor> findByHospitalAndDepartment(Hospital hospital, Department department);

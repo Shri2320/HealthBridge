@@ -55,24 +55,27 @@ public class AdminService {
         Hospital hospital = admin.getHospital();
         List<Department> departments = departmentRepository.findByHospital(hospital);
 
+        // --- NEW: FETCH TOTAL DOCTORS COUNT ---
+        long totalDoctors = doctorRepository.countByHospital(hospital);
+
         Map<String, Object> profile = new HashMap<>();
         profile.put("hospitalId", hospital.getId());
         profile.put("hospitalName", hospital.getName());
         profile.put("location", hospital.getLocation());
         profile.put("phoneNumber", hospital.getPhoneNumber());
         profile.put("email", hospital.getEmail());
-//        profile.put("logo", hospital.getLogo()); // Added logo support
         profile.put("departments", departments);
+
+        // --- NEW: ADD TO RESPONSE ---
+        profile.put("totalDoctors", totalDoctors);
 
         return profile;
     }
 
-    // --- NEW METHOD ADDED FOR SEARCH ---
     public Map<String, Object> searchDoctorByEmail(String email) {
         Doctor doctor = doctorRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with email: " + email));
 
-        // Create a safe response map avoiding infinite recursion if you have cyclic relationships
         Map<String, Object> response = new HashMap<>();
         response.put("id", doctor.getId());
         response.put("name", doctor.getName());
@@ -80,9 +83,6 @@ public class AdminService {
         response.put("specialization", doctor.getSpecialization());
         response.put("departmentName", doctor.getDepartment().getName());
 
-        // Return existing availabilities if any
-        // Note: Make sure your Doctor entity has a getter: getAvailabilities()
-        // If not, use doctorAvailabilityRepository.findByDoctor(doctor)
         List<Map<String, Object>> availabilityList = doctorAvailabilityRepository.findByDoctor(doctor)
                 .stream()
                 .map(avail -> {

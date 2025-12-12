@@ -33,10 +33,8 @@ public class AdminController {
         return ResponseEntity.ok(profile);
     }
 
-    // --- NEW ENDPOINT ADDED ---
     @GetMapping("/doctor/search")
     public ResponseEntity<Map<String, Object>> searchDoctor(@RequestParam String email) {
-        // We use the service method to find and return the doctor
         Map<String, Object> doctorData = adminService.searchDoctorByEmail(email);
         return ResponseEntity.ok(doctorData);
     }
