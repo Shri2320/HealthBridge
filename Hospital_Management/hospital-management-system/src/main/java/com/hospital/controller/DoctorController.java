@@ -51,6 +51,13 @@ public class DoctorController {
         return ResponseEntity.ok(appointments);
     }
 
+    @GetMapping("/appointments")
+    public ResponseEntity<List<Map<String, Object>>> getAllAppointments(Authentication authentication) {
+        String email = authentication.getName();
+        List<Map<String, Object>> appointments = doctorService.getAllAppointments(email);
+        return ResponseEntity.ok(appointments);
+    }
+
     // --- NEW ENDPOINT ADDED HERE ---
     @PutMapping("/appointments/{id}/status")
     public ResponseEntity<Map<String, Object>> updateAppointmentStatus(

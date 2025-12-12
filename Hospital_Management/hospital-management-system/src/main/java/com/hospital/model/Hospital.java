@@ -46,6 +46,7 @@ public class Hospital {
     private List<Department> departments = new ArrayList<>();
     
     @OneToMany(mappedBy = "hospital", cascade = CascadeType.ALL)
+    @JsonIgnore // avoid recursive serialization in patient-facing endpoints
     private List<Doctor> doctors = new ArrayList<>();
     
     @CreationTimestamp

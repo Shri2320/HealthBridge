@@ -62,8 +62,8 @@ public class PatientController {
     }
 
     @GetMapping("/hospitals")
-    public ResponseEntity<List<Hospital>> getAllHospitals() {
-        List<Hospital> hospitals = patientService.getAllHospitals();
+    public ResponseEntity<List<Map<String, Object>>> getAllHospitals() {
+        List<Map<String, Object>> hospitals = patientService.getAllHospitals();
         return ResponseEntity.ok(hospitals);
     }
 
@@ -101,5 +101,12 @@ public class PatientController {
         String email = authentication.getName();
         List<AppointmentResponseDTO> appointments = patientService.getPatientAppointments(email);
         return ResponseEntity.ok(appointments);
+    }
+
+    @GetMapping("/profile") // NEW ENDPOINT
+    public ResponseEntity<Map<String, Object>> getPatientProfile(Authentication authentication) {
+        String email = authentication.getName();
+        Map<String, Object> profile = patientService.getPatientProfile(email);
+        return ResponseEntity.ok(profile);
     }
 }

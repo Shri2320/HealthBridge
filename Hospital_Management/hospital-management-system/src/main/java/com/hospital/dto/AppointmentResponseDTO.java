@@ -17,4 +17,5 @@ public class AppointmentResponseDTO {
     private LocalTime time;
     private AppointmentStatus status; // ACCEPTED, REJECTED, PENDING
     private String displayMessage;    // The specific message for the frontend
+    private String symptoms;
 }

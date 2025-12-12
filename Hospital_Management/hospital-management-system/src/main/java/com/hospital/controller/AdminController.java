@@ -33,9 +33,17 @@ public class AdminController {
         return ResponseEntity.ok(profile);
     }
 
+    // --- FIX IS HERE ---
     @GetMapping("/doctor/search")
-    public ResponseEntity<Map<String, Object>> searchDoctor(@RequestParam String email) {
-        Map<String, Object> doctorData = adminService.searchDoctorByEmail(email);
+    public ResponseEntity<Map<String, Object>> searchDoctor(
+            Authentication authentication, // 1. Inject Authentication
+            @RequestParam String email) {  // 2. The doctor's email to search
+
+        String adminEmail = authentication.getName(); // 3. Get Admin's email
+
+        // 4. Pass BOTH to the service
+        Map<String, Object> doctorData = adminService.searchDoctorByEmail(adminEmail, email);
+
         return ResponseEntity.ok(doctorData);
     }
 

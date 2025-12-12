@@ -39,8 +39,8 @@ public class PatientService {
             throw new ValidationException("Passwords do not match");
         }
 
-        // Check if email already exists
-        if (patientRepository.existsByEmail(dto.getEmail())) {
+        // ✅ FIX: Use case-insensitive check for existence
+        if (patientRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new ValidationException("Email already registered");
         }
 
@@ -73,7 +73,8 @@ public class PatientService {
     }
 
     public Map<String, Object> loginPatient(LoginDTO dto) {
-        Patient patient = patientRepository.findByEmail(dto.getEmail())
+        // ✅ FIX: Use case-insensitive find for login
+        Patient patient = patientRepository.findByEmailIgnoreCase(dto.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid credentials"));
 
         if (!passwordEncoder.matches(dto.getPassword(), patient.getPassword())) {
@@ -94,7 +95,8 @@ public class PatientService {
     @Transactional
     public MedicalDocument uploadDocument(String email, MultipartFile file,
                                           DocumentType documentType, String description) throws IOException {
-        Patient patient = patientRepository.findByEmail(email)
+        // ✅ FIX: Use case-insensitive find
+        Patient patient = patientRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         String fileName = fileStorageService.storeFile(file);
@@ -110,19 +112,37 @@ public class PatientService {
     }
 
     public List<MedicalDocument> getPatientDocuments(String email) {
-        Patient patient = patientRepository.findByEmail(email)
+        // ✅ FIX: Use case-insensitive find
+        Patient patient = patientRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         return medicalDocumentRepository.findByPatientOrderByUploadDateDesc(patient);
     }
 
-    public List<Hospital> getAllHospitals() {
-        return hospitalRepository.findAll();
+    public List<Map<String, Object>> getAllHospitals() {
+        return hospitalRepository.findAll().stream().map(hospital -> {
+            Map<String, Object> dto = new HashMap<>();
+            dto.put("id", hospital.getId());
+            dto.put("name", hospital.getName());
+            dto.put("location", hospital.getLocation());
+            dto.put("email", hospital.getEmail());
+            dto.put("phoneNumber", hospital.getPhoneNumber());
+            dto.put("logoUrl", hospital.getLogoUrl());
+
+            // include department names only to avoid recursive serialization
+            List<String> deptNames = hospital.getDepartments() == null ? List.of()
+                    : hospital.getDepartments().stream()
+                    .map(dept -> dept.getName().toString())
+                    .toList();
+            dto.put("departments", deptNames);
+            return dto;
+        }).toList();
     }
 
     @Transactional
     public Appointment bookAppointment(String email, AppointmentDTO dto) {
-        Patient patient = patientRepository.findByEmail(email)
+        // ✅ FIX: Use case-insensitive find
+        Patient patient = patientRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
@@ -179,6 +199,7 @@ public class PatientService {
 
     // ✅ NEW METHOD: Fetch appointment history with custom status messages
     public List<AppointmentResponseDTO> getPatientAppointments(String email) {
+        // ✅ FIX: Use case-insensitive find in repository logic if possible
         List<Appointment> appointments = appointmentRepository.findByPatientEmailOrderByAppointmentDateDesc(email);
 
         return appointments.stream().map(appt -> {
@@ -196,12 +217,43 @@ public class PatientService {
                     .appointmentId(appt.getId())
                     .doctorName(appt.getDoctor().getName())
                     .department(appt.getDoctor().getDepartment().getName().toString())
-                    .hospitalName(appt.getHospital().getName()) // Make sure Hospital has getName()
+                    .hospitalName(appt.getHospital().getName())
                     .date(appt.getAppointmentDate())
                     .time(appt.getAppointmentTime())
                     .status(appt.getStatus())
                     .displayMessage(message)
+                    .symptoms(appt.getSymptoms())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    public Map<String, Object> getPatientProfile(String email) {
+        // Use the robust case-insensitive lookup
+        Patient patient = patientRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+
+        // Fetch patient-specific documents (optional, can be moved to separate API if too large)
+        List<MedicalDocument> documents = medicalDocumentRepository.findByPatientOrderByUploadDateDesc(patient);
+
+        Map<String, Object> profile = new HashMap<>();
+        profile.put("id", patient.getId());
+        profile.put("name", patient.getName());
+        profile.put("email", patient.getEmail());
+        profile.put("gender", patient.getGender().toString());
+        profile.put("age", patient.getAge());
+        profile.put("bmi", patient.getBodyMassIndex()); // Use 'bmi' for frontend compatibility
+        profile.put("address", patient.getAddress());
+        profile.put("bloodGroup", patient.getBloodGroup().toString());
+        profile.put("income", patient.getIncome());
+        profile.put("religion", patient.getReligion());
+        profile.put("occupation", patient.getOccupation());
+        profile.put("familyBackgroundDiseases", patient.getFamilyBackgroundDiseases());
+        profile.put("documents", documents);
+
+        // Note: Appointments and previousDetails would ideally be fetched here too,
+        // but we'll fetch them separately below for simplicity, or include them
+        // if your Patient model has lazy loading disabled or uses DTO projections.
+
+        return profile;
     }
 }

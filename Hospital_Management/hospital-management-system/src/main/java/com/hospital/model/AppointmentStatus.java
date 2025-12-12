@@ -1,9 +1,9 @@
 package com.hospital.model;
 
 public enum AppointmentStatus {
-    SCHEDULED,  // <--- Add this (Used when patient first books)
-    ACCEPTED,   // (Used when doctor approves)
-    REJECTED,   // (Used when doctor denies)
-    COMPLETED,  // (Optional: Used after visit is done)
-    CANCELLED   // (Optional: Used if patient cancels)
+    SCHEDULED,  // 0
+    ACCEPTED,   // 1
+    REJECTED,   // 2
+    COMPLETED,  // 3
+    CANCELLED   // 4
 }
