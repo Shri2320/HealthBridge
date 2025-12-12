@@ -18,6 +18,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     // ✅ NEW METHOD: To filter by Doctor, Date, AND Status
     List<Appointment> findByDoctorAndAppointmentDateAndStatus(Doctor doctor, LocalDate date, AppointmentStatus status);
 
+    // All appointments for doctor ordered by date asc
+    List<Appointment> findByDoctorOrderByAppointmentDateAsc(Doctor doctor);
+
     // Existing: For fetching patient history by email (Newest first)
     List<Appointment> findByPatientEmailOrderByAppointmentDateDesc(String email);
 

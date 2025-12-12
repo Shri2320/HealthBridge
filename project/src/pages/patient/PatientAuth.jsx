@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { validatePassword, validateRequired, validateAge, validateBMI, validateEmail } from '../../utils/validation';
 import { bloodGroups, genderOptions, religionOptions, dummyCredentials } from '../../utils/dummyData';
+import api from '../../services/api';
 
 const PatientAuth = ({ onBack, onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,6 +13,7 @@ const PatientAuth = ({ onBack, onLogin }) => {
   const [otpSent, setOtpSent] = useState(false);
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [backendMessage, setBackendMessage] = useState('');
+  const [registerLoading, setRegisterLoading] = useState(false);
 
   const [loginData, setLoginData] = useState({
     email: '',
@@ -145,85 +147,79 @@ const PatientAuth = ({ onBack, onLogin }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (validateLoginForm()) {
-      const storedPatients = JSON.parse(localStorage.getItem('patients') || '[]');
-      const identifier = loginData.email.toLowerCase();
-      const patient = storedPatients.find(
-        (p) =>
-          p.email?.toLowerCase() === identifier ||
-          p.username?.toLowerCase() === identifier
-      );
+    if (!validateLoginForm()) return;
 
-      const matchesStored = patient && patient.password === loginData.password;
+    try {
+      setErrors({});
+      const response = await api.post('/patient/login', {
+        email: loginData.email,
+        password: loginData.password,
+      });
 
-      // Allow demo credentials even if localStorage is stale
-      const demo = dummyCredentials.patients.find(
-        (p) =>
-          p.email?.toLowerCase() === identifier ||
-          p.username?.toLowerCase() === identifier
-      );
-      const matchesDemo = demo && demo.password === loginData.password;
-
-      const resolvedUser = matchesStored ? patient : matchesDemo ? {
-        ...demo,
-        name: demo.username === 'patient1' ? 'John Doe' : 'Jane Smith',
-        gender: 'MALE',
-        age: 35,
-        bmi: 24.5,
-        address: '123 Main Street, City',
-        bloodGroup: 'O_POSITIVE',
-        income: 50000,
-        religion: 'Christianity',
-        occupation: 'Software Engineer',
-        familyDiseases: 'Diabetes',
-        familyBackgroundDiseases: 'Diabetes',
-        documents: [],
-        appointments: [],
-        previousDetails: []
-      } : null;
-
-      if (resolvedUser) {
-        // If demo path used and not present, ensure stored for session continuity
-        if (!matchesStored && resolvedUser.email) {
-          const updated = [...storedPatients.filter((p) => p.email?.toLowerCase() !== identifier && p.username?.toLowerCase() !== identifier), resolvedUser];
-          localStorage.setItem('patients', JSON.stringify(updated));
-        }
-        localStorage.setItem('currentPatient', resolvedUser.email || resolvedUser.username);
-        onLogin(resolvedUser.email || resolvedUser.username);
-      } else {
-        setErrors({ general: 'Invalid email or password. Try: patient1@example.com / Patient@123' });
-      }
+      const { token, patientId, name, message } = response.data || {};
+      if (token) localStorage.setItem('token', token);
+      if (loginData.email) localStorage.setItem('currentPatient', loginData.email);
+      onLogin(loginData.email);
+    } catch (error) {
+      setErrors({ general: error.response?.data?.message || 'Invalid email or password' });
     }
   };
 
-  const handleRegister = (e) => {
-    e.preventDefault();
-    if (validateRegisterForm()) {
-      const storedPatients = JSON.parse(localStorage.getItem('patients') || '[]');
+ const handleRegister = async (e) => {
+  e.preventDefault();
+  if (!validateRegisterForm()) return;
 
-      if (storedPatients.some((p) => p.email?.toLowerCase() === registerData.email.toLowerCase())) {
-        setErrors({ email: 'Email already exists' });
-        return;
-      }
+  try {
+    setRegisterLoading(true);
+    const payload = {
+      name: registerData.name,
+      email: registerData.email,
+      gender: registerData.gender,
+      age: Number(registerData.age),
+      bodyMassIndex: Number(registerData.bmi),
+      address: registerData.address,
+      bloodGroup: registerData.bloodGroup,
+      income: Number(registerData.income),
+      religion: registerData.religion,
+      occupation: registerData.occupation,
+      familyBackgroundDiseases: registerData.familyBackgroundDiseases,
+      password: registerData.password,
+      confirmPassword: registerData.confirmPassword,
+    };
 
-      const newPatient = {
-        ...registerData,
-        username: registerData.email, // legacy compatibility
-        familyBackgroundDiseases: registerData.familyBackgroundDiseases,
-        familyDiseases: registerData.familyBackgroundDiseases,
-        documents: [],
-        appointments: [],
-        previousDetails: []
-      };
+    const response = await api.post('/patient/register', payload);
 
-      storedPatients.push(newPatient);
-      localStorage.setItem('patients', JSON.stringify(storedPatients));
-      localStorage.setItem('currentPatient', newPatient.email);
-      onLogin(newPatient.email);
-    }
-  };
+    const { token, patientId, message } = response.data || {};
+    // Do NOT auto-login; just inform and switch to login tab
+    setBackendMessage(message || 'Registered successfully. Please log in to continue.');
+    setIsLogin(true);
+    setShowForgotPassword(false);
+    setLoginData({ email: registerData.email || '', password: '' });
+    // Optionally clear registration form
+    setRegisterData({
+      name: '',
+      email: '',
+      gender: '',
+      age: '',
+      bmi: '',
+      address: '',
+      bloodGroup: '',
+      income: '',
+      religion: '',
+      occupation: '',
+      familyBackgroundDiseases: '',
+      password: '',
+      confirmPassword: ''
+    });
+  } catch (error) {
+    setErrors({ general: error.response?.data?.message || 'Registration failed' });
+  } finally {
+    setRegisterLoading(false);
+  }
+};
+
 
   const handleSendOtp = () => {
     const storedPatients = JSON.parse(localStorage.getItem('patients') || '[]');
@@ -738,9 +734,10 @@ const PatientAuth = ({ onBack, onLogin }) => {
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-[#0066B2] to-[#00A8E8] text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-300"
+                  disabled={registerLoading}
+                  className={`w-full bg-gradient-to-r from-[#0066B2] to-[#00A8E8] text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-300 ${registerLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  Register
+                  {registerLoading ? 'Registering...' : 'Register'}
                 </button>
 
                 <div className="text-center">

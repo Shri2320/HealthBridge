@@ -55,7 +55,6 @@ public class AdminService {
         Hospital hospital = admin.getHospital();
         List<Department> departments = departmentRepository.findByHospital(hospital);
 
-        // --- NEW: FETCH TOTAL DOCTORS COUNT ---
         long totalDoctors = doctorRepository.countByHospital(hospital);
 
         Map<String, Object> profile = new HashMap<>();
@@ -64,18 +63,48 @@ public class AdminService {
         profile.put("location", hospital.getLocation());
         profile.put("phoneNumber", hospital.getPhoneNumber());
         profile.put("email", hospital.getEmail());
+        // profile.put("logo", hospital.getLogo());
         profile.put("departments", departments);
-
-        // --- NEW: ADD TO RESPONSE ---
         profile.put("totalDoctors", totalDoctors);
 
         return profile;
     }
 
-    public Map<String, Object> searchDoctorByEmail(String email) {
-        Doctor doctor = doctorRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found with email: " + email));
+    // --- DEBUG VERSION OF SEARCH ---
+    public Map<String, Object> searchDoctorByEmail(String adminEmail, String searchEmail) {
+        System.out.println("--- SEARCH DEBUG START ---");
+        System.out.println("1. Searching for Doctor Email: " + searchEmail);
+        System.out.println("2. Requesting Admin Email: " + adminEmail);
 
+        // 1. Get Admin
+        Admin admin = adminRepository.findByEmail(adminEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Admin not found"));
+
+        System.out.println("3. Admin Found. Hospital ID: " + admin.getHospital().getId());
+
+        // 2. Clean input
+        String cleanEmail = searchEmail.trim();
+
+        // 3. Find Doctor
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(cleanEmail)
+                .orElseThrow(() -> {
+                    System.out.println("!!! ERROR: Doctor email not found in DB: " + cleanEmail);
+                    return new ResourceNotFoundException("Doctor not found with email: " + cleanEmail);
+                });
+
+        System.out.println("4. Doctor Found: " + doctor.getName());
+        System.out.println("5. Doctor Hospital ID: " + doctor.getHospital().getId());
+
+        // 4. SECURITY CHECK
+        if (!doctor.getHospital().getId().equals(admin.getHospital().getId())) {
+            System.out.println("!!! SECURITY MISMATCH !!!");
+            System.out.println("Admin Hospital ID (" + admin.getHospital().getId() + ") does not match Doctor Hospital ID (" + doctor.getHospital().getId() + ")");
+            throw new ResourceNotFoundException("Doctor not found in your hospital (ID Mismatch)");
+        }
+
+        System.out.println("6. Success! IDs Match.");
+
+        // 5. Build Response
         Map<String, Object> response = new HashMap<>();
         response.put("id", doctor.getId());
         response.put("name", doctor.getName());
@@ -96,7 +125,6 @@ public class AdminService {
                 .collect(Collectors.toList());
 
         response.put("availabilities", availabilityList);
-
         return response;
     }
 

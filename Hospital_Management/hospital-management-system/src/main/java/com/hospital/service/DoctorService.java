@@ -33,18 +33,26 @@ public class DoctorService {
 
         String token = jwtService.generateToken(doctor.getEmail(), "DOCTOR");
 
+        // Remove sensitive data
+        doctor.setPassword(null);
+
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Login successful");
-        response.put("doctorId", doctor.getId());
-        response.put("name", doctor.getName());
-        response.put("specialization", doctor.getSpecialization());
         response.put("token", token);
+        response.put("doctor", Map.of(
+                "id", doctor.getId(),
+                "name", doctor.getName(),
+                "email", doctor.getEmail(),
+                "specialization", doctor.getSpecialization(),
+                "qualification", doctor.getQualification(),
+                "experience", doctor.getExperience(),
+                "hospital", doctor.getHospital().getName(),
+                "department", doctor.getDepartment().getName()));
 
         return response;
     }
-
     public Map<String, Object> getDoctorProfile(String email) {
-        Doctor doctor = doctorRepository.findByEmail(email)
+        // FIX: Changed findByEmail -> findByEmailIgnoreCase
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
         Map<String, Object> profile = new HashMap<>();
@@ -61,7 +69,8 @@ public class DoctorService {
     }
 
     public Map<String, Object> getTreatmentHistory(String email, LocalDate date) {
-        Doctor doctor = doctorRepository.findByEmail(email)
+        // FIX: Changed findByEmail -> findByEmailIgnoreCase
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
         List<Appointment> appointments = appointmentRepository.findByDoctorAndAppointmentDate(doctor, date);
@@ -76,46 +85,35 @@ public class DoctorService {
     }
 
     public List<Map<String, Object>> getTodayAppointments(String email) {
-        Doctor doctor = doctorRepository.findByEmail(email)
+        // Case-insensitive lookup
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
         LocalDate today = LocalDate.now();
 
-        // ✅ UPDATED LINE: Now filters by date AND Status (ACCEPTED)
-        // Ensure AppointmentStatus.ACCEPTED exists in your Enum. If you use CONFIRMED, change it here.
-        List<Appointment> appointments = appointmentRepository.findByDoctorAndAppointmentDateAndStatus(
-                doctor,
-                today,
-                AppointmentStatus.ACCEPTED
-        );
+        // Show all appointments for today (scheduled or already accepted/rejected)
+        List<Appointment> appointments = appointmentRepository.findByDoctorAndAppointmentDate(doctor, today);
 
         return appointments.stream().map(appointment -> {
             Patient patient = appointment.getPatient();
-            List<MedicalDocument> documents = medicalDocumentRepository.findByPatient(patient);
 
             Map<String, Object> appointmentInfo = new HashMap<>();
-            appointmentInfo.put("appointmentId", appointment.getId());
-            appointmentInfo.put("appointmentTime", appointment.getAppointmentTime());
-            appointmentInfo.put("status", appointment.getStatus());
+            appointmentInfo.put("id", appointment.getId());
+            appointmentInfo.put("date", appointment.getAppointmentDate());
+            appointmentInfo.put("time", appointment.getAppointmentTime());
+            appointmentInfo.put("status", appointment.getStatus()); // SCHEDULED / ACCEPTED / REJECTED / etc.
             appointmentInfo.put("symptoms", appointment.getSymptoms());
             appointmentInfo.put("patientName", patient.getName());
             appointmentInfo.put("patientGender", patient.getGender());
             appointmentInfo.put("patientAge", patient.getAge());
-            appointmentInfo.put("patientBMI", patient.getBodyMassIndex());
-            appointmentInfo.put("patientAddress", patient.getAddress());
-            appointmentInfo.put("patientBloodGroup", patient.getBloodGroup());
-            appointmentInfo.put("patientIncome", patient.getIncome());
-            appointmentInfo.put("patientReligion", patient.getReligion());
-            appointmentInfo.put("patientOccupation", patient.getOccupation());
-            appointmentInfo.put("familyDiseases", patient.getFamilyBackgroundDiseases());
-            appointmentInfo.put("medicalDocuments", documents);
 
             return appointmentInfo;
         }).toList();
     }
 
     public Map<String, Object> updateAppointmentStatus(String email, Long appointmentId, String status) {
-        Doctor doctor = doctorRepository.findByEmail(email)
+        // FIX: Changed findByEmail -> findByEmailIgnoreCase
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
 
         Appointment appointment = appointmentRepository.findById(appointmentId)
@@ -137,7 +135,29 @@ public class DoctorService {
 
             return response;
         } catch (IllegalArgumentException e) {
-            throw new ValidationException("Invalid status provided. Allowed values: SCHEDULED, ACCEPTED, COMPLETED, CANCELLED");
+            throw new ValidationException("Invalid status provided. Allowed values: SCHEDULED, ACCEPTED, REJECTED, COMPLETED, CANCELLED");
         }
+    }
+
+    public List<Map<String, Object>> getAllAppointments(String email) {
+        Doctor doctor = doctorRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Doctor not found"));
+
+        List<Appointment> appointments = appointmentRepository.findByDoctorOrderByAppointmentDateAsc(doctor);
+
+        return appointments.stream().map(appointment -> {
+            Patient patient = appointment.getPatient();
+            List<MedicalDocument> documents = medicalDocumentRepository.findByPatient(patient);
+            Map<String, Object> info = new HashMap<>();
+            info.put("id", appointment.getId());
+            info.put("date", appointment.getAppointmentDate());
+            info.put("time", appointment.getAppointmentTime());
+            info.put("status", appointment.getStatus());
+            info.put("symptoms", appointment.getSymptoms());
+            info.put("patientName", patient.getName());
+            info.put("patientEmail", patient.getEmail());
+            info.put("documents", documents);
+            return info;
+        }).toList();
     }
 }

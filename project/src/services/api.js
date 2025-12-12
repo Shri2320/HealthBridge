@@ -1,25 +1,33 @@
+// services/api.js
 import axios from 'axios';
 
-// Create a central "client" for all your requests
 const api = axios.create({
-    baseURL: 'http://localhost:8080/api', // The address of your backend
-    headers: {
-        'Content-Type': 'application/json',
-    }
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
 });
 
-// Automatically add the Token to every request (if we have one)
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token'); // Grab token from browser storage
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
+// Attach JWT token to every request if present
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+// Optional: handle 401 globally
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      // Token expired or unauthorized
+      localStorage.removeItem('token');
+      localStorage.removeItem('currentDoctor');
+      window.location.reload(); // Or redirect to login page
     }
+    return Promise.reject(error);
+  }
 );
 
 export default api;

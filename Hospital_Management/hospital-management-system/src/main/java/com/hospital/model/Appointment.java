@@ -52,7 +52,8 @@ public class Appointment {
     @Column(length = 1000)
     private String symptoms;
 
-    @Enumerated(EnumType.STRING)
+    // Store as ordinal to match existing DB tinyint column
+    @Enumerated(EnumType.ORDINAL)
     private AppointmentStatus status = AppointmentStatus.SCHEDULED; // Default status
 
     @CreationTimestamp
