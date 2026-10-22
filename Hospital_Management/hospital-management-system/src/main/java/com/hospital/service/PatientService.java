@@ -73,10 +73,17 @@ public class PatientService {
     }
 
     public Map<String, Object> loginPatient(LoginDTO dto) {
+        // Normalize email for consistent lookup
+        String normalizedEmail = dto.getEmail() != null ? dto.getEmail().toLowerCase().trim() : null;
+        
         // ✅ FIX: Use case-insensitive find for login
-        Patient patient = patientRepository.findByEmailIgnoreCase(dto.getEmail())
+        Patient patient = patientRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid credentials"));
 
+        System.out.println("Login attempt for email: " + normalizedEmail);
+        System.out.println("Stored password hash: " + patient.getPassword());
+        System.out.println("Password matches: " + passwordEncoder.matches(dto.getPassword(), patient.getPassword()));
+        
         if (!passwordEncoder.matches(dto.getPassword(), patient.getPassword())) {
             throw new ValidationException("Invalid credentials");
         }

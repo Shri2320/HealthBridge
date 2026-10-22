@@ -13,6 +13,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -42,10 +43,13 @@ public class PasswordResetService {
     private final Map<String, OtpData> otpStorage = new HashMap<>();
 
     public String forgotPassword(String email) {
-        // 1. Check if user exists
-        boolean userExists = adminRepository.findByEmail(email).isPresent() ||
-                doctorRepository.findByEmail(email).isPresent() ||
-                patientRepository.findByEmail(email).isPresent();
+        // Normalize email to lowercase for consistent lookup
+        String normalizedEmail = email.toLowerCase().trim();
+        
+        // 1. Check if user exists (use case-insensitive for Patient, case-sensitive for others)
+        boolean userExists = adminRepository.findByEmailIgnoreCase(normalizedEmail).isPresent() ||
+                doctorRepository.findByEmailIgnoreCase(normalizedEmail).isPresent() ||
+                patientRepository.findByEmailIgnoreCase(normalizedEmail).isPresent();
 
         if (!userExists) {
             throw new RuntimeException("Email is not registered with us.");
@@ -57,64 +61,76 @@ public class PasswordResetService {
         // 3. Set Expiration Time (Now + 5 minutes)
         LocalDateTime expiry = LocalDateTime.now().plusMinutes(5);
 
-        // 4. Store OTP with Expiration
-        otpStorage.put(email, new OtpData(otp, expiry));
+        // 4. Store OTP with Expiration (use normalized email as key)
+        otpStorage.put(normalizedEmail, new OtpData(otp, expiry));
 
-        // 5. Send Email
+        // 5. Send Email (use original email for sending)
         sendEmail(email, otp);
 
         return "OTP sent successfully. It is valid for 5 minutes.";
     }
 
+    @Transactional
     public String resetPassword(String email, String otp, String newPassword) {
+        // Normalize email to lowercase for consistent lookup
+        String normalizedEmail = email.toLowerCase().trim();
+        
         // 1. Check if OTP exists
-        if (!otpStorage.containsKey(email)) {
+        if (!otpStorage.containsKey(normalizedEmail)) {
             throw new RuntimeException("No OTP request found for this email.");
         }
 
-        OtpData storedData = otpStorage.get(email);
+        OtpData storedData = otpStorage.get(normalizedEmail);
 
         // 2. Check if OTP matches
         if (!storedData.getOtp().equals(otp)) {
             throw new RuntimeException("Invalid OTP.");
         }
 
-        // 3. NEW: Check if OTP is Expired
+        // 3. Check if OTP is Expired
         if (LocalDateTime.now().isAfter(storedData.getExpiryTime())) {
-            otpStorage.remove(email); // Clear expired OTP
+            otpStorage.remove(normalizedEmail); // Clear expired OTP
             throw new RuntimeException("OTP has expired. Please request a new one.");
         }
 
-        // 4. Update Password
+        // 4. Update Password (use case-insensitive lookup for Patient and Doctor to match login behavior)
         String encodedPassword = passwordEncoder.encode(newPassword);
         boolean passwordUpdated = false;
 
-        Optional<Admin> adminOpt = adminRepository.findByEmail(email);
+        // Try Admin first (case-sensitive)
+        Optional<Admin> adminOpt = adminRepository.findByEmailIgnoreCase(normalizedEmail);
         if (adminOpt.isPresent()) {
             Admin admin = adminOpt.get();
             admin.setPassword(encodedPassword);
             adminRepository.save(admin);
             passwordUpdated = true;
         } else {
-            Optional<Doctor> doctorOpt = doctorRepository.findByEmail(email);
+            // Try Doctor (case-insensitive to match login)
+            Optional<Doctor> doctorOpt = doctorRepository.findByEmailIgnoreCase(normalizedEmail);
             if (doctorOpt.isPresent()) {
                 Doctor doctor = doctorOpt.get();
                 doctor.setPassword(encodedPassword);
                 doctorRepository.save(doctor);
                 passwordUpdated = true;
             } else {
-                Optional<Patient> patientOpt = patientRepository.findByEmail(email);
+                // Try Patient (case-insensitive to match login)
+                Optional<Patient> patientOpt = patientRepository.findByEmailIgnoreCase(normalizedEmail);
                 if (patientOpt.isPresent()) {
                     Patient patient = patientOpt.get();
+                    String oldPasswordHash = patient.getPassword();
                     patient.setPassword(encodedPassword);
-                    patientRepository.save(patient);
+                    Patient savedPatient = patientRepository.saveAndFlush(patient); // Save and flush immediately
+                    System.out.println("Password reset for patient: " + savedPatient.getEmail());
+                    System.out.println("Old password hash: " + oldPasswordHash);
+                    System.out.println("New password hash: " + savedPatient.getPassword());
+                    System.out.println("Password verification test: " + passwordEncoder.matches(newPassword, savedPatient.getPassword()));
                     passwordUpdated = true;
                 }
             }
         }
 
         if (passwordUpdated) {
-            otpStorage.remove(email); // Clear OTP after success
+            otpStorage.remove(normalizedEmail); // Clear OTP after success
             return "Password reset successfully. You can now login.";
         } else {
             throw new RuntimeException("User not found.");
